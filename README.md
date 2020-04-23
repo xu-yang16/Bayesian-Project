@@ -12,19 +12,19 @@
 ## 当前问题
 1. 不明白怎么对$j$求积。Appendix中MCMC第一步，第一项是对$j$求积，但是之前公式中是对$i$。（$i$是sample，$j$是feature）
 
-![1](https://github.com/xu-yang16/Bayesian-Project/blob/master/pic/1-1)
+![](https://github.com/xu-yang16/Bayesian-Project/blob/master/pic/1-1.jpg)
 
-![1](https://github.com/xu-yang16/Bayesian-Project/blob/master/pic/1-2)
+![](https://github.com/xu-yang16/Bayesian-Project/blob/master/pic/1-2.jpg)
 
 2. 两个$\Sigma_{k(\gamma)}$是一样的吗？
 
-![1](https://github.com/xu-yang16/Bayesian-Project/blob/master/pic/2-1)
+![](https://github.com/xu-yang16/Bayesian-Project/blob/master/pic/2-1.jpg)
 
-![1](https://github.com/xu-yang16/Bayesian-Project/blob/master/pic/2-2)
+![](https://github.com/xu-yang16/Bayesian-Project/blob/master/pic/2-2.jpg)
 
 3. 找不到$\mu_{(\gamma^c)}$的定义。
 
-![1](https://github.com/xu-yang16/Bayesian-Project/blob/master/pic/3-1)
+![](https://github.com/xu-yang16/Bayesian-Project/blob/master/pic/3-1.jpg)
 
 
 ## 内容 🌝

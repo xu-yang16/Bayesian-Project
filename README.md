@@ -15,15 +15,15 @@ $$
     \prod_{j:\gamma_j=0}p(x_{j(\gamma^c)}|\gamma^N)
 $$
 $$
-    x_{i(\gamma^c)}|\cdot\sim N(0,\Omega_{()\gamma^c})
+    x_{i(\gamma^c)}|\cdot\sim N(0,\Omega_{(\gamma^c)})
 $$
 
 2. 两个$\Sigma_{k(\gamma)}$是一样的吗？
 $$
-    \beta_{rk(\gamma)}\sim (1-\delta_{rk})I_0(\beta_{rk(\gamma)})+\delta_{rk}N(b_{0k(\gamma)},h\sum_{k(\gamma)})
+    \beta_{rk(\gamma)}\sim (1-\delta_{rk})I_0(\beta_{rk(\gamma)})+\delta_{rk}N(b_{0k(\gamma)},h\Sigma_{k(\gamma)})
 $$
 $$
-    x_{i(\gamma)}|g_i=k,\cdot\sim N(\mu_{k(\gamma)},\sum_{k(\gamma)})
+    x_{i(\gamma)}|g_i=k,\cdot\sim N(\mu_{k(\gamma)},\Sigma_{k(\gamma)})
 $$
 
 3. 找不到$\mu_{(\gamma^c)}$的定义。

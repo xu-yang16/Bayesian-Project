@@ -18,6 +18,8 @@ $$
     x_{i(\gamma^c)}|\cdot\sim N(0,\Omega_{(\gamma^c)})
 $$
 
+（已解决，各$\mathbf{x}_j$独立）
+
 2. 两个$\Sigma_{k(\gamma)}$是一样的吗？
 $$
     \beta_{rk(\gamma)}\sim (1-\delta_{rk})I_0(\beta_{rk(\gamma)})+\delta_{rk}N(b_{0k(\gamma)},h\Sigma_{k(\gamma)})

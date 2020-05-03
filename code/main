@@ -48,7 +48,7 @@ class MCMC_sampler:
         self.delta = np.array(self.delta)  # R * K
         self.m_0k = m_0k
 
-    def one_epoch(self):
+    def init(self):
         self.sigma2 = np.apply_along_axis(
             lambda ab: invgamma(ab[0], ab[1]).rvs(P),
             0, [[a0] + ak, [b0] + bk]
@@ -74,62 +74,126 @@ class MCMC_sampler:
         self.Gamma_0 = np.array(self.Gamma_0)  # K * P * P
         self.nu = np.array(self.nu)  # K * P
         self.mu_0 = np.array(self.mu_0)  # K * P
-        pdb.set_trace()
 
-    def M_H_gamma(self, gamma_O):
-        def mu_ik_gamma(mu_0k_gamma):
-            return mu_0k_gamma + np.matmul(self.beta[self.delta == 1].T, self.Z[self.delta == 1])  # P_gamma
+    def one_epoch(self):
+        gamma_N = self.random_walk_gamma()
+        self.gamma = self.M_H_gamma(gamma_N)
 
-        def p_xj_gamma_c(gamma):
-            Omega_gamma_c = np.diag(self.sigma2[:, 0][gamma == 0])  # (P - P_gamma) * (P - P_gamma)
-            x_gamma_c = self.X[:, gamma == 0]  # N * P_gamma
+        delta_N = self.random_walk_delta()
+        self.delta = self.M_H_delta(delta_N)
+
+        mu_N = self.random_walk_mu_0()
+        self.mu_0 = self.M_H_mu_0(mu_N)
+
+    def random_walk_gamma(self):
+        p1 = bernoulli(0.05).rvs(P)
+        p1[np.where(self.gamma == 1)] *= -1
+        gamma_N = self.gamma + p1
+        return gamma_N
+
+    def random_walk_delta(self):
+        p1 = bernoulli(0.05).rvs(R)
+        p1[np.where(self.delta == 1)] *= -1
+        delta_N = self.delta + p1
+        return delta_N
+
+    def random_walk_mu_0(self):
+        errors = norm(0, 0.1).rvs(K * P).reshape(2, -1)
+        return self.mu_0 + errors
+
+    def M_H_gamma(self, gamma_N):
+        ratio = self.p_gamma(self.gamma) - self.p_gamma(gamma_N)
+        if ratio >= 0:
+            return self.gamma
+        elif np.log(np.random.uniform()) < ratio:
+            return self.gamma
+        else:
+            return gamma_N
+
+    def M_H_delta(self, delta_N):
+        ratio = self.p_delta(self.delta) - self.p_gamma(delta_N)
+        if ratio >= 0:
+            return self.delta
+        elif np.log(np.random.uniform()) < ratio:
+            return self.delta
+        else:
+            return delta_N
+
+    def M_H_mu_0(self, mu_0_N):
+        ratio = self.p_mu_0(self.mu_0) - self.p_mu_0(mu_0_N)
+        if ratio >= 0:
+            return self.mu_0
+        elif np.log(np.random.uniform()) < ratio:
+            return self.mu_0
+        else:
+            return mu_0_N
+
+    def mu_k_gamma(self, k, gamma, delta, mu_0=None):
+        if not mu_0:
+            mu_0 = self.mu_0
+        return mu_0[k, gamma == 1] + np.matmul(self.beta[delta == 1].T, self.Z[delta == 1])  # P_gamma
+
+    def p_x_gamma(self, gamma, delta=None, mu_0=None):
+        if not delta:
+            delta = self.delta
+        x_gamma = self.X[:, gamma == 1]
+
+        def calc_p_k(k):
+            Sigma_gamma = np.diag(self.sigma2[gamma == 1, k + 1])  # P_gamma * P_gamma
             return np.sum(np.log(
                 np.apply_along_axis(
-                    lambda x: multivariate_normal.pdf(x, np.zeros_like(x), Omega_gamma_c),
-                    0, x_gamma_c
+                    lambda x: multivariate_normal.pdf(x, self.mu_k_gamma(k, gamma, delta, mu_0), Sigma_gamma),
+                    1, x_gamma[self.g == k]
                 )
             ))
 
-        def p_xj_gamma(gamma):
-            x_gamma = self.X[:, gamma == 1]
+        return calc_p_k(0) + calc_p_k(1)
 
-            def calc_p_k(k):
-                Sigma_gamma = np.diag(self.sigma2[gamma == 1, k + 1])  # P_gamma * P_gamma
-                return np.sum(np.log(
-                    np.apply_along_axis(
-                        lambda x: multivariate_normal.pdf(x, mu_ik_gamma(self.mu_0[k, gamma == 1]), Sigma_gamma),
-                        1, x_gamma[self.g == k]
-                    )
-                ))
+    def p_x_gamma_c(self, gamma):
+        Omega_gamma_c = np.diag(self.sigma2[:, 0][gamma == 0])  # (P - P_gamma) * (P - P_gamma)
+        x_gamma_c = self.X[:, gamma == 0]  # N * P_gamma
+        return np.sum(np.log(
+            np.apply_along_axis(
+                lambda x: multivariate_normal.pdf(x, np.zeros_like(x), Omega_gamma_c),
+                0, x_gamma_c
+            )
+        ))
 
+    def p_mu_0kgamma(self, gamma, mu_0=None, k=None):
+        if not mu_0:
+            mu_0 = self.mu_0
+        def calc_p_k(k):
+            return np.log(multivariate_normal.pdf(mu_0[k, gamma == 1],
+                                                  self.nu[gamma == 1, k],
+                                                  h1 * self.Gamma_0[k, gamma == 1, gamma == 1]))
+
+        if not k:
             return calc_p_k(0) + calc_p_k(1)
-
-        def p_mu_0kgamma(gamma):
-            def calc_p_k(k):
-                return np.log(multivariate_normal.pdf(self.mu_0[k, gamma == 1],
-                                                      self.nu[gamma == 1, k],
-                                                      h1 * self.Gamma_0[:, :, k]))
-            return calc_p_k(0) + calc_p_k(1)
-
-        def p_mu_0kgamma_c(gamma):
-            pass
-
-        def p_gamma(gamma):
-            return p_xj_gamma_c(gamma) + p_xj_gamma(gamma) + p_mu_0kgamma(gamma) + \
-                   p_mu_0kgamma_c(gamma) + np.sum(np.log(np.apply_along_axis(bernoulli(0.05).pmf, 0, gamma)))
-
-        ratio = p_gamma(self.gamma) - p_gamma(gamma_O)
-        if ratio >= 0:
-            return self.gamma
-        elif np.random.uniform() < ratio:
-            return self.gamma
         else:
-            return gamma_O
+            return calc_p_k(k)
+
+    def p_mu_0kgamma_c(self, gamma):
+        def calc_p_gamma_c(k):
+            return np.log(multivariate_normal.pdf(self.mu_0[k, gamma == 0],
+                                                  np.zeros(sum(gamma == 0)),
+                                                  self.Gamma_0[k, gamma == 0, gamma == 0]))
+
+        return calc_p_gamma_c(0) + calc_p_gamma_c(1)
+
+    def p_gamma(self, gamma):
+        return self.p_x_gamma_c(gamma) + self.p_x_gamma(gamma) + self.p_mu_0kgamma(gamma) + \
+               self.p_mu_0kgamma_c(gamma) + np.sum(np.log(np.apply_along_axis(bernoulli(0.05).pmf, 0, gamma)))
+
+    def p_delta(self, delta):
+        return self.p_x_gamma(self.gamma, delta) + np.sum(np.log(np.apply_along_axis(bernoulli(0.05).pmf, 0, delta)))
+
+    def p_mu_0(self, mu_0, k):
+        return self.p_x_gamma(self.gamma, self.delta, mu_0) + self.p_mu_0kgamma(self.gamma, mu_0, k)
 
 
 if __name__ == "__main__":
     # generate data samples
-    Z = multivariate_normal(np.zeros(R), np.diag(np.ones(R))).rvs(n1 + n2)  #
+    Z = multivariate_normal(np.zeros(R), np.diag(np.ones(R))).rvs(n1 + n2)  # R * N
     noises = noise.rvs(n1 + n2)
     x1 = np.zeros((n1, P))
     x2 = np.zeros((n2, P))
@@ -147,4 +211,7 @@ if __name__ == "__main__":
 
     # begin simulation
     agent = MCMC_sampler(X, Z, g)
-    agent.one_epoch()
+    agent.init()
+
+    for i in range(1000):
+        agent.one_epoch()

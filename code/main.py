@@ -50,7 +50,7 @@ class MCMC_sampler:
 
     def init(self):
         self.sigma2 = np.apply_along_axis(
-            lambda ab: invgamma(ab[0], ab[1]).rvs(P),
+            lambda ab: invgamma(ab[0], scale=ab[1]).rvs(P),
             0, [[a0] + ak, [b0] + bk]
         ).squeeze()  # P * (K+1)
 
@@ -194,17 +194,16 @@ class MCMC_sampler:
 if __name__ == "__main__":
     # generate data samples
     Z = multivariate_normal(np.zeros(R), np.diag(np.ones(R))).rvs(n1 + n2)  # R * N
-    noises = noise.rvs(n1 + n2)
     x1 = np.zeros((n1, P))
     x2 = np.zeros((n2, P))
 
     for i in range(n1):
         x1[i, :4] = multivariate_normal(mu01 + np.matmul(np.transpose(B1), Z[i, :2]), Sigma1).rvs(1)
-        x1[i, 4:] = noises[i, :]
+        x1[i, 4:] = noise.rvs(1)
 
     for i in range(n2):
         x2[i, :4] = multivariate_normal(mu02 + np.matmul(np.transpose(B2), Z[i, :2]), Sigma2).rvs(1)
-        x2[i, 4:] = noises[i, :]
+        x2[i, 4:] = noise.rvs(1)
 
     X = np.vstack((x1, x2))
     g = np.concatenate((np.zeros(n1), np.ones(n2)))

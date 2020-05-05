@@ -50,7 +50,7 @@ class MCMC_sampler:
 
     def init(self):
         self.sigma2 = np.apply_along_axis(
-            lambda ab: invgamma(ab[0], ab[1]).rvs(P),
+            lambda ab: invgamma(ab[0], scale=ab[1]).rvs(P),
             0, [[a0] + ak, [b0] + bk]
         ).squeeze()  # P * (K+1)
 
@@ -92,9 +92,12 @@ class MCMC_sampler:
         return gamma_N
 
     def random_walk_delta(self):
-        p1 = bernoulli(0.05).rvs(R)
-        p1[np.where(self.delta == 1)] *= -1
-        delta_N = self.delta + p1
+        delta_N = deepcopy(self.delta)
+        for k in range(2):
+            p1 = bernoulli(0.05).rvs(R)
+            p1[np.where(self.delta[k, :] == 1)] *= -1
+            delta_N[k, :] += p1
+
         return delta_N
 
     def random_walk_mu_0(self):
@@ -111,7 +114,7 @@ class MCMC_sampler:
             return gamma_N
 
     def M_H_delta(self, delta_N):
-        ratio = self.p_delta(self.delta) - self.p_gamma(delta_N)
+        ratio = self.p_delta(self.delta) - self.p_delta(delta_N)
         if ratio >= 0:
             return self.delta
         elif np.log(np.random.uniform()) < ratio:
@@ -129,21 +132,26 @@ class MCMC_sampler:
             return mu_0_N
 
     def mu_k_gamma(self, k, gamma, delta, mu_0=None):
-        if not mu_0:
+        if mu_0 is None:
             mu_0 = self.mu_0
-        return mu_0[k, gamma == 1] + np.matmul(self.beta[delta == 1].T, self.Z[delta == 1])  # P_gamma
+        return mu_0[k, gamma == 1] + np.matmul(self.Z[:, delta[k, :] == 1],
+                                               self.beta[k, delta[k, :] == 1][:, gamma == 1])  # P_gamma
 
     def p_x_gamma(self, gamma, delta=None, mu_0=None):
-        if not delta:
+        if delta is None:
             delta = self.delta
         x_gamma = self.X[:, gamma == 1]
 
         def calc_p_k(k):
             Sigma_gamma = np.diag(self.sigma2[gamma == 1, k + 1])  # P_gamma * P_gamma
+            mu_k_gamma = self.mu_k_gamma(k, gamma, delta, mu_0)[self.g == k]
+
+            p_gamma = mu_k_gamma.shape[1]
+
             return np.sum(np.log(
                 np.apply_along_axis(
-                    lambda x: multivariate_normal.pdf(x, self.mu_k_gamma(k, gamma, delta, mu_0), Sigma_gamma),
-                    1, x_gamma[self.g == k]
+                    lambda x_mu: multivariate_normal.pdf(x_mu[:p_gamma], x_mu[p_gamma:], Sigma_gamma),
+                    1, np.hstack((x_gamma[self.g == k], mu_k_gamma))
                 )
             ))
 
@@ -151,20 +159,22 @@ class MCMC_sampler:
 
     def p_x_gamma_c(self, gamma):
         Omega_gamma_c = np.diag(self.sigma2[:, 0][gamma == 0])  # (P - P_gamma) * (P - P_gamma)
+
         x_gamma_c = self.X[:, gamma == 0]  # N * P_gamma
         return np.sum(np.log(
             np.apply_along_axis(
                 lambda x: multivariate_normal.pdf(x, np.zeros_like(x), Omega_gamma_c),
-                0, x_gamma_c
+                1, x_gamma_c
             )
         ))
 
     def p_mu_0kgamma(self, gamma, mu_0=None, k=None):
-        if not mu_0:
+        if mu_0 is None:
             mu_0 = self.mu_0
+
         def calc_p_k(k):
             return np.log(multivariate_normal.pdf(mu_0[k, gamma == 1],
-                                                  self.nu[gamma == 1, k],
+                                                  self.nu[k, gamma == 1],
                                                   h1 * self.Gamma_0[k, gamma == 1, gamma == 1]))
 
         if not k:
@@ -187,8 +197,8 @@ class MCMC_sampler:
     def p_delta(self, delta):
         return self.p_x_gamma(self.gamma, delta) + np.sum(np.log(np.apply_along_axis(bernoulli(0.05).pmf, 0, delta)))
 
-    def p_mu_0(self, mu_0, k):
-        return self.p_x_gamma(self.gamma, self.delta, mu_0) + self.p_mu_0kgamma(self.gamma, mu_0, k)
+    def p_mu_0(self, mu_0):
+        return self.p_x_gamma(self.gamma, self.delta, mu_0) + self.p_mu_0kgamma(self.gamma, mu_0)
 
 
 if __name__ == "__main__":
@@ -204,7 +214,7 @@ if __name__ == "__main__":
 
     for i in range(n2):
         x2[i, :4] = multivariate_normal(mu02 + np.matmul(np.transpose(B2), Z[i, :2]), Sigma2).rvs(1)
-        x2[i, 4:] = noises[i, :]
+        x2[i, 4:] = noises[n1 + i, :]
 
     X = np.vstack((x1, x2))
     g = np.concatenate((np.zeros(n1), np.ones(n2)))

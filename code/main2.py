@@ -58,6 +58,8 @@ class MCMC_sampler:
             self.delta.append(np.apply_along_axis(lambda x: bernoulli(x).rvs(R), 0, wrk[k, :]))
         self.delta = np.array(self.delta)  # R * K
         self.m_0k = m_0k
+        self.test_gamma = np.array([1] * 4 + [0] * 100)
+        self.test_delta = np.array([[1] * 2 + [0] * 48 for _ in range(2)])
 
     def init(self):
         self.sigma2 = np.apply_along_axis(
@@ -88,7 +90,7 @@ class MCMC_sampler:
         self.det_Q = np.linalg.det(Q)
         self.b_0_p = []
         for j in range(P):
-            self.b_0_p.append(b0 + sum(X[:, j] ** 2))
+            self.b_0_p.append(b0 + sum(X[:, j] ** 2 / 2))
         self.b_0_p = np.array(self.b_0_p)
 
     def one_epoch(self, epoch):
@@ -107,33 +109,31 @@ class MCMC_sampler:
     def random_walk_gamma(self):
         gamma_N = deepcopy(self.gamma)
 
-        if np.random.uniform() < 0.1:
+        if np.random.uniform() < 0.5 or (gamma_N == 0).all():
             index = np.random.choice(np.arange(P))
             gamma_N[index] = 0 if gamma_N[index] == 1 else 1
+
         else:
             index1 = np.random.choice(np.where(self.gamma == 1)[0])
             index2 = np.random.choice(np.where(self.gamma == 0)[0])
             gamma_N[index1] = 0 if gamma_N[index1] == 1 else 1
             gamma_N[index2] = 0 if gamma_N[index2] == 1 else 1
-        if (gamma_N == 0).all():
-            index = np.random.choice(np.arange(P))
-            gamma_N[index] = 0 if gamma_N[index] == 1 else 1
+
         return gamma_N
 
     def random_walk_delta(self):
         delta_N = deepcopy(self.delta)
         for k in range(2):
-            if np.random.uniform() < 0.5:
+            if np.random.uniform() < 0.5 or (delta_N[k, :] == 0).all():
                 index = np.random.choice(np.arange(R))
                 delta_N[k, index] = 0 if delta_N[k, index] == 1 else 1
+
             else:
                 index1 = np.random.choice(np.where(self.delta[k, :] == 1)[0])
                 index2 = np.random.choice(np.where(self.delta[k, :] == 0)[0])
                 delta_N[k, index1] = 0 if delta_N[k, index1] == 1 else 1
                 delta_N[k, index2] = 0 if delta_N[k, index2] == 1 else 1
-            if (delta_N[k, :] == 0).all():
-                index = np.random.choice(np.arange(R))
-                delta_N[k, index] = 0 if delta_N[k, index] == 1 else 1
+
         return delta_N
 
     def random_walk_mu_0(self):
@@ -161,43 +161,37 @@ class MCMC_sampler:
                 self.delta[k, :] = delta_N[k, :]
 
     def M_H_mu_0(self, mu_0_N):
-        feature_list = np.where(self.gamma == 1)[0]
-        for j in feature_list:
-            for k in range(2):
-                ratio = self.p_mu_0(mu_0_N, j, k) - self.p_mu_0(self.mu_0, j, k)
-                if ratio >= 0:
-                    self.mu_0[k, j] = mu_0_N[k, j]
-                elif np.log(np.random.uniform()) > ratio:
-                    continue
-                else:
-                    self.mu_0[k, j] = mu_0_N[k, j]
+        for k in range(2):
+            ratio = self.p_mu_0(mu_0_N, k) - self.p_mu_0(self.mu_0, k)
+            indexes = np.where(np.log(np.random.uniform(len(ratio))) < ratio)[0]
+            self.mu_0[k, indexes] = mu_0_N[k, indexes]
 
-    def p_x_j_gamma(self, j, k, delta, mu_0):
+    def p_x_j_gamma(self, gamma, k, delta, mu_0):
         Z_k_deltak = np.mat(Z[self.g == k, :][:, delta[k, :] == 1])
         abs_delta_k = sum(delta[k, :])
 
         matrix2 = np.matmul(Z_k_deltak.T, Z_k_deltak) + np.identity(abs_delta_k) / h
         matrix2 = np.linalg.inv(matrix2)
-
-        matrix1 = X[self.g == k, j] - mu_0[k, j]
-
         matrix3 = np.identity(nk[k]) - np.matmul(np.matmul(Z_k_deltak, matrix2), Z_k_deltak.T)
 
-        bk_p = np.matmul(np.matmul(matrix1.T, matrix3), matrix1) / 2 + bk[k]
-        ak_p = ak[k] + nk[k] / 2
+        features = np.where(gamma == 1)[0]
+        value = []
+        for j in features:
+            matrix1 = X[self.g == k, j] - mu_0[k, j]
+            bk_p = np.matmul(np.matmul(matrix1.T, matrix3), matrix1) / 2 + bk[k]
+            ak_p = ak[k] + nk[k] / 2
 
-        value = np.log(np.linalg.det(matrix2)) / 2 - ak_p * np.log(bk_p[0, 0]) - nk[k] / 2 * np.log(2 * np.pi) + \
-                np.log(math.gamma(ak_p)) - np.log(math.gamma(ak[k])) + \
-                ak[k] * np.log(bk[k]) - abs_delta_k / 2 * np.log(h)
-        return value
+            value.append(np.log(np.linalg.det(matrix2)) / 2 - ak_p * np.log(bk_p) - nk[k] / 2 * np.log(2 * np.pi) +
+                         np.log(math.gamma(ak_p)) - np.log(math.gamma(ak[k])) +
+                         ak[k] * np.log(bk[k]) - abs_delta_k / 2 * np.log(h))
 
-    def p_x_j_gamma_c(self, gamma):
+        return np.array(value).squeeze()
+
+    def p_x_gamma_c(self, gamma):
         a0_p = a0 + n / 2
-        value = -a0_p * np.sum(np.log(self.b_0_p[gamma == 0]))
-        value += (a0 * np.log(b0) - n / 2 * np.log(2 * np.pi)) * np.sum(gamma == 0) + \
-                 np.log(math.gamma(a0_p) / math.gamma(a0))
-
-        return value
+        value = -a0_p * np.log(self.b_0_p[gamma == 0]) + a0 * np.log(b0) - n / 2 * np.log(2 * np.pi) + \
+                np.log(math.gamma(a0_p) / math.gamma(a0))
+        return np.sum(value)
 
     def p_mu_0_gamma(self, gamma, mu_0):
         p_gamma = sum(gamma)
@@ -212,31 +206,28 @@ class MCMC_sampler:
 
     def p_mu_0_gamma_c(self, gamma):
         value = ((math.gamma(a_tilde + 0.5) - math.gamma(a_tilde)) - np.log(np.pi * 2) / 2 +
-                 a_tilde * np.log(b_tilde)) * np.sum(gamma == 0) * K
+                 a_tilde * np.log(b_tilde)) * np.sum(gamma == 0)
         for k in range(2):
             value -= np.sum(
                 (a_tilde + 0.5) * np.log(b_tilde + 0.5 * (self.mu_0[k, gamma == 0] - self.m_0k[k]) ** 2))
         return value
 
     def p_gamma(self, gamma):
-        value = self.p_x_j_gamma_c(gamma) + self.p_mu_0_gamma(gamma, self.mu_0) + \
+        value = self.p_x_gamma_c(gamma) + self.p_mu_0_gamma(gamma, self.mu_0) + \
                 self.p_mu_0_gamma_c(gamma) + np.sum(np.log(np.apply_along_axis(bernoulli(0.05).pmf, 0, gamma)))
-        feature_list = np.where(gamma == 1)[0]
-        for j in feature_list:
-            for k in range(2):
-                value += self.p_x_j_gamma(j, k, self.delta, self.mu_0)
+        # pdb.set_trace()
+        for k in range(2):
+            value += np.sum(self.p_x_j_gamma(gamma, k, self.delta, self.mu_0))
         return value
 
     def p_delta(self, delta, k):
         value = np.sum(np.log(np.apply_along_axis(bernoulli(0.05).pmf, 0, delta)))
-        feature_list = np.where(self.gamma == 1)[0]
-        for j in feature_list:
-            value += self.p_x_j_gamma(j, k, delta, self.mu_0)
+        value += np.sum(self.p_x_j_gamma(self.gamma, k, delta, self.mu_0))
         return value
 
-    def p_mu_0(self, mu_0, j, k):
+    def p_mu_0(self, mu_0, k):
         value = self.p_mu_0_gamma(self.gamma, mu_0)
-        value += self.p_x_j_gamma(j, k, self.delta, mu_0)
+        value += self.p_x_j_gamma(self.gamma, k, self.delta, mu_0)
         return value
 
 
@@ -249,11 +240,11 @@ if __name__ == "__main__":
     x2 = np.zeros((n2, P))
 
     for i in range(n1):
-        x1[i, :4] = multivariate_normal(mu01 + np.matmul(np.transpose(B1), Z[i, :2]), Sigma1).rvs(1)
+        x1[i, :4] = multivariate_normal(mu01 + np.matmul(B1.T, Z[i, :2]), Sigma1).rvs(1)
         x1[i, 4:] = noises[i, :]
 
     for i in range(n2):
-        x2[i, :4] = multivariate_normal(mu02 + np.matmul(np.transpose(B2), Z[i, :2]), Sigma2).rvs(1)
+        x2[i, :4] = multivariate_normal(mu02 + np.matmul(B2.T, Z[n1 + i, :2]), Sigma2).rvs(1)
         x2[i, 4:] = noises[n1 + i, :]
 
     X = np.vstack((x1, x2))
@@ -267,4 +258,5 @@ if __name__ == "__main__":
         if (i % 50 == 0):
             print("i={}, gamma={}".format(i, agent.gamma))
             print("delta={}".format(agent.delta))
+            print("mu_0={}".format(agent.mu_0))
         agent.one_epoch(i)

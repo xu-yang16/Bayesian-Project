@@ -1,0 +1,79 @@
+\documentclass[a4paper]{article}
+\usepackage{ctex}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{diagbox}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\geometry{left=3.0cm, right=3.0cm, top=2.0cm, bottom=2.0cm}
+
+%opening
+\title{贝叶斯统计导论 大作业}
+\author{}
+
+\begin{document}
+
+\maketitle
+
+
+\section{理论推导}
+MCMC需要用到后验分布如下：
+
+$$
+\begin{aligned}
+p(x_{j(\gamma^C)}|\gamma) & \int p(x_j|\sigma^2_{0j})\cdot p(\sigma^2_{0j}|a_0, b_0)d\sigma^2_{0j}\\
+&=\frac{1}{\sqrt{2\pi}}\int\left(\frac{1}{\sigma_{0j}}\right)^n\exp\left(-\frac{x_j^2}{2\sigma^2_{0j}}\right)\cdot IG(\sigma^2_{0j}; a_0, b_0)d\sigma^2_{0j}\\
+p(\boldsymbol{x}_j(\gamma^C)|\gamma)&=({2\pi})^{-n/2}\frac{b_0^{a_0}}{\Gamma(a_0)}\int(\sigma^2_{0j})^{(-a_0-1-n/2)}\exp\left(-\frac{\boldsymbol x_j^T\boldsymbol x_j+2b_0}{2\sigma^2_{0j}}\right)d\sigma^2_{0j}\\
+&=({2\pi})^{-n/2}\frac{b_0^{a_0}}{\Gamma(a_0)}\frac{\Gamma(a_0^{\prime})}{b_0^{\prime a_0^{\prime}}}, a_0^\prime = a_0+\frac{n}{2}, b_0^\prime = \frac{\boldsymbol x_j^T\boldsymbol x_j}{2} + b_0\\
+p\left(\mathbf{x}_{j k(\gamma)} | \mathbf{Z}_{\mathbf{k}\left(\delta_{\mathbf{k}}\right)}, \mu_{0 \mathbf{j} \mathbf{k}}, \boldsymbol{\delta}, \boldsymbol{\gamma}\right) 
+&=\iint p(\boldsymbol{x}_{jk}| \boldsymbol{Z}_{k(\delta_k)}, \beta_{kj})\cdot p(\beta_{jk})\cdot p(\sigma_{jk}^2;a_k, b_k)d\beta_{jk}d\sigma^2_{jk}\\
+&=\frac{b_k^{a_k}}{\Gamma(a_k)}\iint(2\pi)^{-n_k/2}(\sigma_{jk}^2)^{-a_k+n_k/2}h^{-\delta_k/2}(2\pi)^{-\delta_k/2}(\sigma_{jk}^2)^{-\delta_k/2}\\ &\cdot\exp\left(-\frac{\beta^T_{kj}\Sigma^{-1}\beta_{kj}+\boldsymbol{m}^T\boldsymbol{m}-2\beta_k^TZ_k^T\boldsymbol{m}+2b_k}{2\sigma^2_{jk}}\right)d\beta_kd\sigma^2_{jk}\\
+&=\frac{b_k^{a_k}}{\Gamma(a_k)}\iint(2\pi)^{-n_k/2}(\sigma_{jk}^2)^{-a_k+n_k/2}h^{-\delta_k/2}(2\pi)^{-\delta_k/2}(\sigma_{jk}^2)^{-\delta_k/2}|\Sigma|^{-1/2}|\Sigma|^{1/2}\\
+&\cdot\exp\left(-\frac{(\beta_{kj}-\Sigma\cdot Z_k^T\cdot\boldsymbol{m})^T\Sigma^{-1}(\beta_{kj}-\Sigma\cdot Z_k^T\cdot\boldsymbol{m})}
+{2\sigma^2_{jk}}\right)d\beta_k\\
+&\cdot\exp\left(-\frac{\boldsymbol{m}^T\boldsymbol{m}-\boldsymbol{m}^TZ_k\Sigma Z_k^T\boldsymbol{m} +2b_k}{2\sigma^2_{jk}}\right)d\sigma^2_{jk}\\
+&=\frac{b_k^{a_k}}{\Gamma(a_k)}(2\pi)^{-n_k/2}\int(\sigma_{jk}^2)^{-a_k+n_k/2}h^{-\delta_k/2}|\Sigma|^{1/2}\\
+&\cdot\exp\left(-\frac{\boldsymbol{m}^T\boldsymbol{m}-\boldsymbol{m}^TZ_k\Sigma Z_k^T\boldsymbol{m} +2b_k}{2\sigma^2_{jk}}\right)d\sigma^2_{jk}\\
+&=\left(\frac{1}{\sqrt{2 \pi}}\right)^{n_{k}}h^{-\delta_k/2} \frac{\Gamma\left(a_{k}^{\prime}\right)}{\Gamma\left(a_{k}\right)} \frac{b_{k}^{a_{k}}}{b_{k}^{\prime a_{k}^{\prime}}}|\Sigma|^{1/2}
+\end{aligned}
+$$
+其中
+$$
+\begin{aligned}
+\Sigma&=(\mathbf{Z}^T_{k\left(\delta_{k}\right)} \mathbf{Z}_{k\left(\delta_{k}\right)}+h^{-1} \mathbf{I}_{|\boldsymbol{\delta}_k|})^{-1}\\
+\boldsymbol{m} &=\boldsymbol{x}_{jk}-\boldsymbol{1}_{n_k}\mu_{0jk}\\
+a_k^\prime &= a_k+n_k/2\\
+b_k^\prime &= b_k + \boldsymbol{m}^T(I_{n_k} - Z_k\Sigma Z_k^T)\boldsymbol{m}/2
+\end{aligned}
+$$
+$|\boldsymbol{\delta}_k|$表示$\delta_k=1$的元素个数。
+
+$$
+\begin{aligned}
+p(\boldsymbol{\mu}_{0k(\gamma)}|\boldsymbol{\gamma})&=\iint p(\mu_{0k(\gamma)}|\nu_{k(\gamma)}, h_1\Gamma_{0k(\gamma)})\cdot p(\mu_{k(\gamma)}|m_{0k(\gamma)}, h_1\Gamma_{0k(\gamma)})d\nu_{k(\gamma)}\\
+&\cdot\text{Inv-Wishart}(\Gamma_{0k(\gamma); d_k, Q})d\Gamma_{0k(\gamma)}\\
+&=\iint(2\pi)^{-p_{\gamma}/2}|h_1\Gamma_{0k(\gamma)}|^{-1/2}\exp\left(-\frac{1}{2}(\mu_{0k(\gamma)}-\nu_{0k(\gamma)})^T(h_1\Gamma_{0k(\gamma)})^{-1}(\mu_{0k(\gamma)}-\nu_{0k(\gamma)})\right)\\
+&\cdot(2h_1\pi)^{-p_{\gamma}/2}|\Gamma_{0k(\gamma)}|^{-1/2}\exp\left(-\frac{1}{2}(\nu_{0k(\gamma)}-m_{0k(\gamma)})^T(h_1\Gamma_{0k(\gamma)})^{-1}(\nu_{0k(\gamma)}-m_{0k(\gamma)})\right)d\nu_{k(\gamma)}\\
+&\cdot \text{Inv-Wishart}(\Gamma_{0k(\gamma); d_k, Q})d\Gamma_{0k(\gamma)}\\
+&=\iint(2\pi)^{-p_{\gamma}/2}|h_1\Gamma_{0k(\gamma)}/2|^{-1/2}\\
+&\cdot\exp\left(-\frac{1}{2}\left(\nu_{0k(\gamma)}-\frac{\mu_{0k(\gamma)}+m_{0k(\gamma)}}{2}\right)^T\left(\frac{h_1}{2}\Gamma_{0k(\gamma)}\right)^{-1}\left(\nu_{0k(\gamma)}-\frac{\mu_{0k(\gamma)}+m_{0k(\gamma)}}{2}\right)\right)d\nu_{k(\gamma)}\\
+&\cdot(4h_1\pi)^{-p_\gamma/2}|\Gamma_{0k(\gamma)}|^{-1/2}\exp\left(-\frac{(\mu_{0k(\gamma)}-m_{0k(\gamma)})^T(h_1\Gamma_{0k(\gamma)})^{-1}(\mu_{0k(\gamma)}-m_{0k(\gamma)})}{4}\right)\\
+&\cdot \text{Inv-Wishart}(\Gamma_{0k(\gamma); d_k, Q})d\Gamma_{0k(\gamma)}\\
+&=\int(4h_1\pi)^{-p_\gamma/2}|\Gamma_{0k(\gamma)}|^{-(d_k+p_\gamma+2)/2}\exp\left(-\frac{\text{tr}((2h_1S_+Q)\Gamma_{0k(\gamma)}^{-1})}{2}\right)\cdot \frac{|Q|^{d_k/2}}{2^{d_kp_\gamma/2}\Gamma_{p_\gamma}(d_k/2)} d\Gamma_{0k(\gamma)}\\
+&=(h_1^*\pi)^{-p_\gamma/2}\frac{|Q|^{d_k/2}}{|Q+S|^{(d_k+1)/2}/h_1^*}\frac{\Gamma((d_k+1)/2)}{\Gamma((d_k-p_\gamma+1)/2)}\\
+p(\boldsymbol{\mu}_{0jk(\gamma^c)}|\boldsymbol{\gamma})&= \int p(\mu_{0jk(\gamma^c)}|\sigma^2_{j})\cdot p(\sigma^2_{j}|\tilde{a}_j, \tilde{b}_j)d\sigma^2_{j}\\
+&=\frac{1}{\sqrt{2\pi}}\frac{\tilde{b}_{j}^{\tilde{a}_{j}}}{\tilde{b}_{j k}^{\prime \tilde{a}_{j}^{\prime}}}\frac{\Gamma\left(\tilde{a}_{j}^{\prime}\right)}{\Gamma\left(\tilde{a}_{j}\right)}
+\end{aligned}
+$$
+其中
+$$
+\begin{aligned}
+S&=(\mu_{0k(\gamma)}-m_{0k(\gamma)})(\mu_{0k(\gamma)}-m_{0k(\gamma)})^T\\
+ h_1^*&=2h_1\\
+\tilde{a}_{j}^{\prime}&=\tilde{a}_{j}+1 / 2\\
+\tilde{b}_{j k}^{\prime}&=\tilde{b}_{j}+\frac{\left(\mu_{0 j k}-m_{0 j k}\right)^{2}}{2}
+\end{aligned}
+$$
+
+\end{document}
